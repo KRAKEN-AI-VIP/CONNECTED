@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KRAKEN AI - المُتنبئ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Cairo', sans-serif; background-color: #050505; color: #d4d4d8; }
+        
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        
+        @keyframes pulse-yellow { 
+            0%, 100% { box-shadow: 0 0 10px rgba(234, 179, 8, 0.4); } 
+            50% { box-shadow: 0 0 20px rgba(234, 179, 8, 0.8); } 
+        }
+        .warning-glow { animation: pulse-yellow 2s infinite; }
+        
+        @keyframes pulse-green { 
+            0%, 100% { box-shadow: 0 0 10px rgba(34, 197, 94, 0.4); } 
+            50% { box-shadow: 0 0 20px rgba(34, 197, 94, 0.8); } 
+        }
+        .success-glow { animation: pulse-green 2s infinite; }
+        
+        .loading-bar { position: relative; overflow: hidden; }
+        .loading-bar::after {
+            content: ''; position: absolute; top: 0; right: -100%; width: 50%; height: 100%;
+            background: linear-gradient(270deg, transparent, rgba(59, 130, 246, 0.8), transparent);
+            animation: loading 1.5s infinite ease-in-out;
+        }
+        @keyframes loading { 100% { right: 200%; } }
+        
+        @keyframes slideUpFade {
+            from { opacity: 0; transform: translateY(20px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .animate-slide-up { animation: slideUpFade 0.4s ease-out forwards; }
+        
+        @keyframes fadeOutDown {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(20px); }
+        }
+        .animate-fade-out { animation: fadeOutDown 0.4s ease-out forwards; }
+
+        /* Terminal typing effect */
+        .typing-text::after {
+            content: '|';
+            animation: blink 1s step-start infinite;
+            margin-right: 2px;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* Mines/Apple Grid Styles */
+        .mine-cell {
+            aspect-ratio: 1;
+            border-radius: 0.5rem;
+            background-color: #18181b; 
+            border: 1px solid #27272a; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            font-size: 1.25rem;
+        }
+        .mine-cell.safe {
+            background-color: rgba(34, 197, 94, 0.2);
+            border-color: #22c55e;
+            box-shadow: 0 0 10px rgba(34, 197, 94, 0.3) inset;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-4 overflow-x-hidden relative">
+
+    <div id="view-instructions" class="app-view flex-1 w-full max-w-xl flex flex-col items-center pt-4 pb-20 animate-fade-in z-10">
+        <div class="text-center mb-6">
+            <h1 class="text-3xl font-black text-white tracking-tighter mb-2">التعليمات</h1>
+            <p class="text-xs text-zinc-500 uppercase tracking-widest font-bold">كيفية استخدام المُتنبئ</p>
+        </div>
+
+        <div class="bg-zinc-900/80 backdrop-blur-md border border-zinc-800 rounded-2xl p-6 shadow-2xl w-full text-right relative overflow-hidden mb-6">
+            <div class="space-y-6">
+                <!-- Step 1 -->
+                <div class="flex gap-4 items-start">
+                    <div class="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/50 flex items-center justify-center text-xl shrink-0 shadow-[0_0_15px_rgba(59,130,246,0.2)]">💰</div>
+                    <div>
+                        <h3 class="text-white font-bold mb-1">مبلغ الرهان</h3>
+                        <p class="text-sm text-zinc-400 leading-relaxed">ابدأ بمبالغ صغيرة (5 إلى 10٪ من رصيدك). هذا ضروري لتسخين الخوارزمية وتجنب جذب انتباه نظام مكافحة الاحتيال في الكازينو.</p>
+                    </div>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="flex gap-4 items-start">
+                    <div class="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/50 flex items-center justify-center text-xl shrink-0 shadow-[0_0_15px_rgba(168,85,247,0.2)]">🎯</div>
+                    <div>
+                        <h3 class="text-white font-bold mb-1">توليد الإشارة</h3>
+                        <p class="text-sm text-zinc-400 leading-relaxed">اختر لعبة وانقر على الزر للحصول على إشارة. ستعطيك الخوارزمية مسارًا آمنًا (خلايا) أو مضاعفًا دقيقًا.</p>
+                    </div>
+                </div>
+
+                <!-- Strict Rule -->
+                <div class="bg-red-500/10 border border-red-500/30 p-5 rounded-xl mt-4 relative overflow-hidden">
+                    <div class="absolute left-[-10px] top-[-10px] opacity-10">
+                        <svg class="w-24 h-24 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    </div>
+                    <h3 class="text-red-500 font-bold mb-2 flex items-center gap-2 text-lg">
+                        قاعدة صارمة!
+                    </h3>
+                    <p class="text-sm text-red-200 leading-relaxed relative z-10">
+                        إذا أظهر المُتنبئ مضاعفًا دقيقًا، <strong>فالتزم به بدقة</strong> واسحب أرباحك عند هذه القيمة. يُمنع منعًا باتًا أن تكون جشعًا وتخاطر بانتظار مضاعف أعلى!
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <button type="button" id="btn-understand" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-bold text-lg tracking-wider transition-all shadow-[0_0_20px_rgba(37,99,235,0.4)] flex items-center justify-center gap-3">
+            فهمت القواعد، ابدأ
+            <svg class="w-5 h-5 transform rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+        </button>
+    </div>
+
+    <div id="view-landing" class="app-view hidden flex-1 w-full max-w-xl flex-col items-center justify-center animate-fade-in z-10">
+        <div class="text-center mb-10">
+            <svg class="w-24 h-24 mx-auto mb-6 fill-white drop-shadow-[0_0_15px_rgba(59,130,246,0.6)]" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <path d="M40 20 L50 35 L40 50 L55 50 L65 30 L55 20 Z" />
+                <path d="M60 40 L65 50 L55 60 L65 60 L75 45 L65 35 Z" />
+                <path d="M70 55 L75 65 L65 75 L75 75 L85 60 L75 50 Z" />
+            </svg>
+            <h1 class="text-4xl font-black text-white tracking-tighter mb-2">تم ربط <span class="text-green-500">الحساب</span></h1>
+            <p class="text-xs text-zinc-500 uppercase tracking-widest font-bold">الخطوة 2: التحقق من الشبكة</p>
+        </div>
+
+        <div class="bg-zinc-900/80 backdrop-blur-md border border-zinc-800 rounded-2xl p-8 shadow-2xl w-full text-center relative overflow-hidden">
+            <div class="absolute top-0 right-0 w-full h-1 bg-gradient-to-l from-blue-600 to-green-500"></div>
+            <h2 class="text-xl font-black text-white mb-4">الانتهاء من التفعيل</h2>
+            <p class="text-sm text-zinc-400 mb-8 leading-relaxed">
+                تم التعرف على حسابك بواسطة شبكة KRAKEN. هناك حاجة إلى مزامنة نهائية لإنشاء نفق الاختراق.
+            </p>
+            <button type="button" id="btn-sync" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-4 rounded-xl font-bold text-lg tracking-wider transition-all shadow-[0_0_20px_rgba(37,99,235,0.4)] flex items-center justify-center gap-3">
+                مزامنة الآن
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            </button>
+        </div>
+    </div>
+
+    <div id="view-loader" class="app-view hidden flex-1 w-full max-w-xl flex-col items-center justify-center animate-fade-in z-10">
+        <div class="w-full bg-[#0a0a0c] border border-zinc-800 rounded-2xl p-6 shadow-2xl font-mono text-sm text-left" dir="ltr">
+            <!-- Keeping terminal LTR to look like real hacker terminal -->
+            <div class="flex items-center gap-2 mb-6 pb-4 border-b border-zinc-800">
+                <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                <span class="ml-2 text-zinc-500 text-xs" id="terminal-header">kraken_core_v2.exe</span>
+            </div>
+            
+            <div class="space-y-2 text-zinc-400 min-h-[120px] flex flex-col justify-end" id="terminal-output">
+                <!-- JS will inject lines here -->
+            </div>
+            
+            <div class="mt-6 w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden loading-bar"></div>
+        </div>
+    </div>
+
+    <div id="view-games" class="app-view hidden flex-1 w-full max-w-xl flex-col items-center pt-10 pb-20 animate-fade-in z-10">
+        <div class="text-center mb-8">
+            <h2 class="text-2xl font-black text-white tracking-tight mb-2">حدد الهدف</h2>
+            <p class="text-sm text-zinc-500">اختر لعبة لاختراقها</p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 w-full px-2">
+            <!-- Mines -->
+            <button class="game-card bg-zinc-900 border border-zinc-800 hover:border-blue-500 rounded-2xl p-6 flex flex-col items-center gap-4 transition-all" data-game="Mines">
+                <div class="text-5xl">💣</div>
+                <span class="font-bold text-white tracking-widest text-sm uppercase">Mines</span>
+            </button>
+            
+            <!-- Aviator -->
+            <button class="game-card bg-zinc-900 border border-zinc-800 hover:border-red-500 rounded-2xl p-6 flex flex-col items-center gap-4 transition-all" data-game="Aviator">
+                <div class="text-5xl">✈️</div>
+                <span class="font-bold text-white tracking-widest text-sm uppercase">Aviator</span>
+            </button>
+            
+            <!-- Thimbles -->
+            <button class="game-card bg-zinc-900 border border-zinc-800 hover:border-yellow-500 rounded-2xl p-6 flex flex-col items-center gap-4 transition-all" data-game="Thimbles">
+                <div class="text-5xl">🎩</div>
+                <span class="font-bold text-white tracking-widest text-sm uppercase">Thimbles</span>
+            </button>
+
+            <!-- Apple -->
+            <button class="game-card bg-zinc-900 border border-zinc-800 hover:border-green-500 rounded-2xl p-6 flex flex-col items-center gap-4 transition-all" data-game="Apple">
+                <div class="text-5xl">🍏</div>
+                <span class="font-bold text-white tracking-widest text-sm text-center uppercase">Apple of Fortune</span>
+            </button>
+        </div>
+    </div>
+
+    <div id="view-signal" class="app-view hidden flex-1 w-full max-w-xl flex-col items-center pt-8 pb-20 animate-fade-in z-10">
+        
+        <div class="w-full flex items-center justify-between mb-8 pb-4 border-b border-zinc-800">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-green-500/10 rounded-lg flex items-center justify-center border border-green-500/30">
+                    <svg class="w-6 h-6 text-green-500 transform rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="w-2 h-2 bg-green-500 rounded-full success-glow"></span>
+                        <span class="text-xs font-black text-green-500 tracking-wider">النفق نشط</span>
+                    </div>
+                    <p class="text-[10px] font-bold text-zinc-500 tracking-widest uppercase">الهدف: <span id="target-game-name" class="text-white"></span></p>
+                </div>
+            </div>
+            <div class="text-left">
+                <p class="text-xs text-zinc-500 mb-1">الدقة</p>
+                <p class="text-sm font-black text-white font-mono" dir="ltr">99.1%</p>
+            </div>
+        </div>
+
+        <!-- Dynamic Signal Container -->
+        <div class="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 w-full mb-8 relative flex justify-center items-center min-h-[250px]" id="signal-container">
+            <!-- Injected via JS based on game -->
+        </div>
+
+        <div class="w-full px-4">
+            <button type="button" id="btn-next-signal" class="w-full bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 py-4 rounded-xl font-bold text-lg tracking-wider transition-all flex items-center justify-center gap-3 shadow-[0_5px_15px_rgba(0,0,0,0.5)]">
+                الحصول على الإشارة التالية
+                <svg class="w-5 h-5 transform rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            </button>
+            <p class="text-center text-xs text-zinc-600 mt-4 uppercase">الإشارات المجانية المتبقية: <span class="text-white font-bold bg-zinc-800 px-2 py-0.5 rounded">0</span></p>
+        </div>
+    </div>
+
+    <div id="view-deposit" class="app-view hidden flex-1 w-full max-w-xl flex-col items-center pt-6 pb-20 animate-fade-in z-10">
+        
+        <div class="w-full flex items-center justify-between mb-6 pb-4 border-b border-zinc-800">
+            <div class="flex items-center gap-3">
+                <svg class="w-10 h-10 fill-zinc-500" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M40 20 L50 35 L40 50 L55 50 L65 30 L55 20 Z" />
+                    <path d="M60 40 L65 50 L55 60 L65 60 L75 45 L65 35 Z" />
+                    <path d="M70 55 L75 65 L65 75 L75 75 L85 60 L75 50 Z" />
+                </svg>
+                <div>
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="w-2 h-2 bg-yellow-500 rounded-full warning-glow"></span>
+                        <span class="text-xs font-black text-yellow-500 tracking-wider">في انتظار الإيداع</span>
+                    </div>
+                    <p class="text-[10px] font-bold text-zinc-500 tracking-widest uppercase">النفق: محظور</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-6 w-full mb-6 relative overflow-hidden">
+            <div class="absolute left-[-20px] top-[-20px] opacity-10">
+                <svg class="w-32 h-32 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            </div>
+            
+            <h3 class="text-lg font-black text-white mb-2 relative z-10">تم اكتشاف رصيد صفري</h3>
+            <p class="text-sm text-zinc-300 leading-relaxed relative z-10">
+                تم استخدام إشارتك التجريبية. اكتشفت شبكة KRAKEN رصيدًا قدره <span class="text-yellow-500 font-bold bg-yellow-500/10 px-1 py-0.5 rounded border border-yellow-500/20" dir="ltr">0.00 SYP</span> في حسابك. <br><br>
+                لتجاوز نظام مكافحة الاحتيال وتلقي الإشارات التالية دون التعرض لخطر الحظر، تتطلب الخوارزمية رصيدًا نشطًا.
+            </p>
+        </div>
+
+        <div class="w-full bg-zinc-900/50 border border-zinc-800/80 rounded-2xl p-5 mb-6">
+            <h4 class="text-xs text-zinc-500 uppercase tracking-widest font-bold mb-4">خطوات التنشيط:</h4>
+            
+            <div class="space-y-4">
+                <div class="flex gap-3 items-start">
+                    <span class="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 font-bold mt-0.5">1</span> 
+                    <p class="text-sm text-zinc-300 leading-relaxed">
+                        قم بإيداع في حساب الألعاب الخاص بك.<br>
+                        <span class="block mt-1.5 text-xs">الحد الأدنى للمبلغ: <span class="text-green-400 font-bold font-mono bg-green-900/20 px-1.5 py-0.5 rounded border border-green-500/20" dir="ltr">700 SYP</span></span>
+                    </p>
+                </div>
+                <div class="flex gap-3 items-start">
+                    <span class="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 font-bold mt-0.5">2</span> 
+                    <p class="text-sm text-zinc-300 leading-relaxed">
+                        التقط شاشة للإيداع الناجح أو رصيدك الجديد.
+                    </p>
+                </div>
+                <div class="flex gap-3 items-start">
+                    <span class="bg-blue-600 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs shrink-0 font-bold mt-0.5">3</span> 
+                    <p class="text-sm text-zinc-300 leading-relaxed">
+                        أرسل لقطة الشاشة إلى مديرنا لفتح الوصول الكامل إلى الروبوت.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="w-full space-y-3">
+            <a href="https://reffpa.com/L?tag=d_5547148m_69917c_&site=5547148&ad=69917&r=registration" target="_blank" class="w-full bg-gradient-to-r from-blue-700 to-blue-500 hover:from-blue-600 hover:to-blue-400 text-white py-4 rounded-xl font-bold text-base flex items-center justify-center gap-2 transition-all shadow-[0_0_15px_rgba(37,99,235,0.4)]">
+                تعبئة الرصيد
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path></svg>
+            </a>
+
+            <a href="https://telegram.me/AiPredictor2_bot" target="_blank" rel="noreferrer" class="w-full bg-[#2AABEE] hover:bg-[#229ED9] text-white py-4 rounded-xl font-bold text-base flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(42,171,238,0.4)]">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.888-.662 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                إرسال لقطة الشاشة
+            </a>
+        </div>
+    </div>
+
+    <div id="live-feed" class="fixed bottom-4 right-4 left-4 md:right-auto md:left-6 md:w-80 flex flex-col gap-2 z-40 pointer-events-none">
+        <!-- JS will inject toast items here -->
+    </div>
+
+    <script>
+        
+        function switchView(targetViewId) {
+            document.querySelectorAll('.app-view').forEach(v => {
+                v.classList.add('hidden');
+                v.classList.remove('flex');
+            });
+            const target = document.getElementById(targetViewId);
+            target.classList.remove('hidden');
+            target.classList.add('flex');
+        }
+
+        function playTerminalSequence(header, lines, callback) {
+            switchView('view-loader');
+            document.getElementById('terminal-header').innerText = header;
+            const terminal = document.getElementById('terminal-output');
+            terminal.innerHTML = ''; 
+
+            let delay = 0;
+            lines.forEach((line, index) => {
+                setTimeout(() => {
+                    const p = document.createElement('p');
+                    p.innerHTML = line;
+                    p.className = index === lines.length - 1 ? "" : "typing-text";
+                    
+                    if(terminal.lastElementChild) {
+                        terminal.lastElementChild.classList.remove('typing-text');
+                    }
+                    
+                    terminal.appendChild(p);
+                }, delay);
+                delay += 600 + Math.random() * 400; 
+            });
+
+            setTimeout(() => {
+                callback();
+            }, delay + 800);
+        }
+
+
+        // 0. Manual -> Sync Landing
+        document.getElementById('btn-understand').addEventListener('click', () => {
+            switchView('view-landing');
+        });
+
+        // 1. Initial Sync -> Game Selection
+        document.getElementById('btn-sync').addEventListener('click', () => {
+            const lines = [
+                "[ OK ] الاتصال بواجهة برمجة تطبيقات الخادم...",
+                "[ OK ] تم الاتصال. التحقق من المعرف.",
+                "[ OK ] تم التحقق من الرمز الترويجي.",
+                "[....] طلب وحدات التجاوز...",
+                "[ OK ] تم تحميل جميع الوحدات بنجاح."
+            ];
+            playTerminalSequence('kraken_sync.exe', lines, () => {
+                switchView('view-games');
+            });
+        });
+
+        // 2. Select Game -> Show Signal (Always < 2x for Aviator)
+        document.querySelectorAll('.game-card').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const gameName = e.currentTarget.dataset.game;
+                
+                const lines = [
+                    `[....] حقن البرنامج النصي في ${gameName}...`,
+                    `[ OK ] بروتوكول التجاوز نشط.`,
+                    `[....] جمع بيانات RNG...`,
+                    `<span class='text-green-500'>[ OK ] تم فك تشفير التجزئة. الإشارة جاهزة.</span>`
+                ];
+
+                playTerminalSequence(`hack_${gameName.toLowerCase()}.dll`, lines, () => {
+                    document.getElementById('target-game-name').innerText = gameName;
+                    renderSignal(gameName);
+                    switchView('view-signal');
+                });
+            });
+        });
+
+        // 3. Request Next Signal -> Deposit Block (SYP)
+        document.getElementById('btn-next-signal').addEventListener('click', () => {
+            const lines = [
+                "[....] طلب التجزئة التالية...",
+                "[WARN] التحقق من حالة المحفظة...",
+                "<span class='text-yellow-500'>[FAIL] الرصيد الحالي: 0.00 SYP</span>",
+                "<span class='text-red-500'>[ERR] انتهت الفترة التجريبية. تم الحظر!</span>"
+            ];
+            playTerminalSequence('kraken_core.exe', lines, () => {
+                switchView('view-deposit');
+            });
+        });
+
+        function renderSignal(game) {
+            const container = document.getElementById('signal-container');
+            container.innerHTML = ''; 
+
+            if (game === 'Mines') {
+                const grid = document.createElement('div');
+                grid.className = 'grid grid-cols-5 gap-2 w-full max-w-[200px]';
+                grid.dir = 'ltr'; // keep grids ltr for consistency
+                
+                const safeSpots = [];
+                while(safeSpots.length < 4) {
+                    let r = Math.floor(Math.random() * 25);
+                    if(!safeSpots.includes(r)) safeSpots.push(r);
+                }
+
+                for(let i=0; i<25; i++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'mine-cell';
+                    if(safeSpots.includes(i)) {
+                        cell.classList.add('safe');
+                        cell.innerHTML = '⭐';
+                    }
+                    grid.appendChild(cell);
+                }
+                container.appendChild(grid);
+            } 
+            else if (game === 'Aviator') {
+                const mult = (1.10 + Math.random() * 0.89).toFixed(2);
+                container.innerHTML = `
+                    <div class="text-center">
+                        <p class="text-zinc-500 text-sm font-bold tracking-widest mb-2 uppercase">اسحب الأموال عند:</p>
+                        <h3 class="text-6xl font-black text-red-500 font-mono drop-shadow-[0_0_20px_rgba(239,68,68,0.5)]" dir="ltr">
+                            ${mult}x
+                        </h3>
+                        <p class="text-red-500/80 text-xs mt-3 font-bold uppercase animate-pulse">لا تنتظر أكثر!</p>
+                    </div>
+                `;
+            }
+            else if (game === 'Apple') {
+                const grid = document.createElement('div');
+                grid.className = 'flex flex-col-reverse gap-2 w-full max-w-[220px]'; 
+                grid.dir = 'ltr';
+                
+                for(let row = 0; row < 5; row++) {
+                    const rowDiv = document.createElement('div');
+                    rowDiv.className = 'grid grid-cols-5 gap-2 w-full';
+                    
+                    const safeCol = Math.floor(Math.random() * 5);
+                    for(let col = 0; col < 5; col++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'mine-cell bg-[#18181b]';
+                        if(col === safeCol) {
+                            cell.classList.add('safe');
+                            cell.innerHTML = '🍏'; 
+                        } else {
+                            cell.innerHTML = '🍎'; 
+                            cell.style.opacity = '0.2'; 
+                        }
+                        rowDiv.appendChild(cell);
+                    }
+                    grid.appendChild(rowDiv);
+                }
+                container.appendChild(grid);
+            }
+            else if (game === 'Thimbles') {
+                container.innerHTML = `
+                    <div class="text-center flex flex-col items-center">
+                        <div class="flex gap-4 mb-4" dir="ltr">
+                            <div class="text-5xl opacity-30">🎩</div>
+                            <div class="text-5xl animate-bounce drop-shadow-[0_0_15px_rgba(34,197,94,0.8)]">🎩</div>
+                            <div class="text-5xl opacity-30">🎩</div>
+                        </div>
+                        <p class="text-green-500 font-bold uppercase tracking-widest text-sm">الكرة في المنتصف</p>
+                    </div>
+                `;
+            }
+        }
+
+        const fakeGames = [
+            {name: 'MINES', icon: '💣'}, 
+            {name: 'AVIATOR', icon: '✈️'}, 
+            {name: 'APPLE', icon: '🍏'},
+            {name: 'THIMBLES', icon: '🎩'}
+        ];
+
+        // Adjusted for Syria (SYP)
+        const geoConfigs = [
+            { flag: '🇸🇾', currency: 'SYP' } 
+        ];
+
+        function generateRandomId() {
+            const endDigits = Math.floor(100000 + Math.random() * 900000).toString();
+            return `18***${endDigits}`;
+        }
+
+        function showLiveWin() {
+            const game = fakeGames[Math.floor(Math.random() * fakeGames.length)];
+            const geo = geoConfigs[0];
+            
+            // Generate logical amounts in SYP: 1000 to 7000
+            const localAmount = Math.floor(Math.random() * 6001) + 1000; 
+            const formattedAmount = '+' + localAmount.toLocaleString('en-US') + ' ' + geo.currency;
+
+            const feedContainer = document.getElementById('live-feed');
+            
+            const winItem = document.createElement('div');
+            winItem.className = 'bg-zinc-900/95 backdrop-blur-md border border-zinc-800/80 rounded-xl p-3 shadow-[0_5px_20px_rgba(0,0,0,0.6)] flex items-center gap-3 animate-slide-up transition-all';
+            winItem.innerHTML = `
+                <div class="w-10 h-10 bg-gradient-to-br from-zinc-800 to-black rounded-lg flex items-center justify-center text-xl shadow-inner border border-zinc-700/50">
+                    ${game.icon}
+                </div>
+                <div class="flex-1 flex justify-between items-center text-right">
+                    <div>
+                        <p class="text-[12px] font-bold text-white tracking-widest font-mono text-left" dir="ltr">
+                            ${geo.flag} ID: ${generateRandomId()}
+                        </p>
+                        <p class="text-[10px] text-zinc-400 font-sans uppercase">اختراق ${game.name}</p>
+                    </div>
+                    <div class="text-left" dir="ltr">
+                        <p class="text-sm font-black text-green-400 font-mono">${formattedAmount}</p>
+                    </div>
+                </div>
+            `;
+
+            feedContainer.prepend(winItem);
+
+            if (feedContainer.children.length > 3) {
+                const oldestItem = feedContainer.lastElementChild;
+                oldestItem.classList.remove('animate-slide-up');
+                oldestItem.classList.add('animate-fade-out');
+                
+                setTimeout(() => {
+                    if(oldestItem.parentNode) {
+                        oldestItem.remove();
+                    }
+                }, 400); 
+            }
+        }
+
+        setTimeout(function winLoop() {
+            showLiveWin();
+            const nextDelay = Math.floor(Math.random() * 3500) + 2000; 
+            setTimeout(winLoop, nextDelay);
+        }, 1500);
+    </script>
+</body>
+</html>
+
